@@ -43,9 +43,14 @@ async function readBlobContent(containerClient, blobName) {
 }
 
 function createPoller() {
-  const connectionString = process.env.AZURE_STORAGE_CONNECTION_STRING;
-  if (!connectionString) {
-    throw new Error('AZURE_STORAGE_CONNECTION_STRING is not set');
+  const blobServiceUrl = process.env.AZURE_BLOB_SERVICE_URL;
+  if (!blobServiceUrl) {
+    throw new Error('AZURE_BLOB_SERVICE_URL is not set');
+  }
+
+  const sasToken = process.env.AZURE_SAS_TOKEN;
+  if (!sasToken) {
+    throw new Error('AZURE_SAS_TOKEN is not set');
   }
 
   const containerName = process.env.AZURE_CONTAINER_NAME;
@@ -53,7 +58,7 @@ function createPoller() {
     throw new Error('AZURE_CONTAINER_NAME is not set');
   }
 
-  const serviceClient = BlobServiceClient.fromConnectionString(connectionString);
+  const serviceClient = new BlobServiceClient(`${blobServiceUrl}?${sasToken}`);
   const containerClient = serviceClient.getContainerClient(containerName);
   const processed = loadProcessed();
 
