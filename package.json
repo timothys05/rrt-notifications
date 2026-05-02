@@ -1,0 +1,16 @@
+{
+  "name": "rrt-notifications",
+  "version": "1.0.0",
+  "description": "Polls Azure Blob Storage for report files and sends email/SMS notifications",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js",
+    "dev": "node --watch index.js"
+  },
+  "dependencies": {
+    "@azure/storage-blob": "^12.26.0",
+    "@sendgrid/mail": "^8.1.4",
+    "dotenv": "^16.4.7",
+    "twilio": "^5.3.7"
+  }
+}
