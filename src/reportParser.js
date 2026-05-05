@@ -1,27 +1,60 @@
 'use strict';
 
+const AdmZip = require('adm-zip');
+
 /**
- * Parses report file content into a normalized record.
+ * Parses report blob content into a normalized record.
  *
- * Supports JSON files and CSV files (single data row after header).
- * Expected fields: email, phone, optInEmail, optInSms
- * CSV header aliases: opt_in_email / optin_email, opt_in_sms / optin_sms
+ * Accepts a Buffer or string. If the blob is a .zip, extracts the first
+ * JSON or CSV entry and parses that. Otherwise parses as JSON or CSV directly.
+ * Expected fields: email, phone, optInEmail/opt_in_email, optInSms/opt_in_sms
  */
 function parseReport(content, blobName) {
   const ext = blobName.split('.').pop().toLowerCase();
 
+  if (ext === 'zip') {
+    return parseZip(content, blobName);
+  }
+
+  const text = Buffer.isBuffer(content) ? content.toString('utf8') : content;
+
   if (ext === 'json') {
-    return parseJson(content, blobName);
+    return parseJson(text, blobName);
   } else if (ext === 'csv') {
-    return parseCsv(content, blobName);
+    return parseCsv(text, blobName);
   }
 
   // Default: try JSON first, then CSV
   try {
-    return parseJson(content, blobName);
+    return parseJson(text, blobName);
   } catch {
-    return parseCsv(content, blobName);
+    return parseCsv(text, blobName);
   }
+}
+
+function parseZip(content, blobName) {
+  let zip;
+  try {
+    zip = new AdmZip(content);
+  } catch (err) {
+    throw new Error(`[${blobName}] Failed to open zip: ${err.message}`);
+  }
+
+  const entries = zip.getEntries();
+  const jsonEntry = entries.find(e => e.entryName.toLowerCase().endsWith('.json'));
+  const csvEntry = entries.find(e => e.entryName.toLowerCase().endsWith('.csv'));
+
+  if (jsonEntry) {
+    const innerName = `${blobName}/${jsonEntry.entryName}`;
+    return parseJson(zip.readAsText(jsonEntry), innerName);
+  }
+
+  if (csvEntry) {
+    const innerName = `${blobName}/${csvEntry.entryName}`;
+    return parseCsv(zip.readAsText(csvEntry), innerName);
+  }
+
+  throw new Error(`[${blobName}] Zip contains no JSON or CSV file`);
 }
 
 function parseJson(content, blobName) {
@@ -49,7 +82,6 @@ function parseCsv(content, blobName) {
     row[header] = values[i] ?? '';
   });
 
-  // Normalize CSV field aliases
   const data = {
     email: row['email'],
     phone: row['phone'],

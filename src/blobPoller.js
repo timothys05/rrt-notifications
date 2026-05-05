@@ -39,7 +39,7 @@ async function readBlobContent(containerClient, blobName) {
     chunks.push(chunk);
   }
 
-  return Buffer.concat(chunks).toString('utf8');
+  return Buffer.concat(chunks);
 }
 
 function createPoller() {
