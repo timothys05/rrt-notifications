@@ -44,6 +44,8 @@ function parseZip(content, blobName) {
   const jsonEntry = entries.find(e => e.entryName.toLowerCase().endsWith('.json'));
   const csvEntry = entries.find(e => e.entryName.toLowerCase().endsWith('.csv'));
 
+  const manifestEntry = entries.find(e => e.entryName.toLowerCase() === 'manifest.txt');
+
   if (jsonEntry) {
     const innerName = `${blobName}/${jsonEntry.entryName}`;
     return parseJson(zip.readAsText(jsonEntry), innerName);
@@ -54,7 +56,28 @@ function parseZip(content, blobName) {
     return parseCsv(zip.readAsText(csvEntry), innerName);
   }
 
-  throw new Error(`[${blobName}] Zip contains no JSON or CSV file`);
+  if (manifestEntry) {
+    const innerName = `${blobName}/${manifestEntry.entryName}`;
+    return parseManifest(zip.readAsText(manifestEntry), innerName);
+  }
+
+  throw new Error(`[${blobName}] Zip contains no JSON, CSV, or Manifest.txt file`);
+}
+
+function parseManifest(content, blobName) {
+  const field = (label) => {
+    const match = content.match(new RegExp(`^${label}:\\s*(.*)$`, 'm'));
+    return match ? match[1].trim() : '';
+  };
+
+  const data = {
+    email: field('Reporter Email'),
+    phone: field('Reporter Phone Number'),
+    optInSms: field('Text Message Updates Opt-in'),
+    optInEmail: field('Email Updates Opt-in'),
+  };
+
+  return normalize(data, blobName);
 }
 
 function parseJson(content, blobName) {
