@@ -10,8 +10,8 @@
   "dependencies": {
     "@azure/storage-blob": "^12.26.0",
     "@sendgrid/mail": "^8.1.4",
-    "adm-zip": "^0.5.17",
     "dotenv": "^16.4.7",
-    "twilio": "^5.3.7"
+    "twilio": "^5.3.7",
+    "unzipper": "^0.12.3"
   }
 }
