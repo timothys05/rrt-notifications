@@ -46,6 +46,8 @@ async function processBlob(blobName, content) {
         console.error(`[processor] Email failed for "${blobName}": ${err.message}`)
       )
     );
+  } else if (email) {
+    console.log(`[processor] "${blobName}" — skipping email to ${email}: optInEmail is false`);
   }
 
   if (optInSms && phone) {
@@ -54,10 +56,12 @@ async function processBlob(blobName, content) {
         console.error(`[processor] SMS failed for "${blobName}": ${err.message}`)
       )
     );
+  } else if (phone) {
+    console.log(`[processor] "${blobName}" — skipping SMS to ${phone}: optInSms is false`);
   }
 
   if (notifications.length === 0) {
-    console.log(`[processor] "${blobName}" — no notifications opted in, skipping.`);
+    console.log(`[processor] "${blobName}" — no notifications sent`);
   }
 
   await Promise.all(notifications);
