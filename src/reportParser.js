@@ -39,8 +39,6 @@ async function parseReport(content, blobName) {
   }
 }
 
-const ZIP_PASSWORD = 'B25GMr.6kGBp:kV6c0dhTbU]M1wV';
-
 async function parseZip(content, blobName) {
   const id = crypto.randomBytes(8).toString('hex');
   const tmpZip = path.join(os.tmpdir(), `rrt-${id}.zip`);
@@ -51,8 +49,8 @@ async function parseZip(content, blobName) {
     fs.mkdirSync(tmpDir);
 
     try {
-      // -P: password, -j: junk paths (flat extract), -o: overwrite without prompt
-      await execFileAsync('unzip', ['-P', ZIP_PASSWORD, '-j', '-o', tmpZip, '-d', tmpDir]);
+      // -j: junk paths (flat extract), -o: overwrite without prompt
+      await execFileAsync('unzip', ['-j', '-o', tmpZip, '-d', tmpDir]);
     } catch (err) {
       // unzip exits 1 for warnings but still extracts files; treat as success
       if (err.code !== 1) {
