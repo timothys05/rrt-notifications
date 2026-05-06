@@ -32,6 +32,8 @@ function parseReport(content, blobName) {
   }
 }
 
+const ZIP_PASSWORD = 'B25GMr.6kGBp:kV6c0dhTbU]M1wV';
+
 function parseZip(content, blobName) {
   let zip;
   try {
@@ -40,25 +42,23 @@ function parseZip(content, blobName) {
     throw new Error(`[${blobName}] Failed to open zip: ${err.message}`);
   }
 
+  const readEntry = (entry) => zip.readFile(entry, ZIP_PASSWORD).toString('utf8');
+
   const entries = zip.getEntries();
   const jsonEntry = entries.find(e => e.entryName.toLowerCase().endsWith('.json'));
   const csvEntry = entries.find(e => e.entryName.toLowerCase().endsWith('.csv'));
-
   const manifestEntry = entries.find(e => e.entryName.toLowerCase() === 'manifest.txt');
 
   if (jsonEntry) {
-    const innerName = `${blobName}/${jsonEntry.entryName}`;
-    return parseJson(zip.readAsText(jsonEntry), innerName);
+    return parseJson(readEntry(jsonEntry), `${blobName}/${jsonEntry.entryName}`);
   }
 
   if (csvEntry) {
-    const innerName = `${blobName}/${csvEntry.entryName}`;
-    return parseCsv(zip.readAsText(csvEntry), innerName);
+    return parseCsv(readEntry(csvEntry), `${blobName}/${csvEntry.entryName}`);
   }
 
   if (manifestEntry) {
-    const innerName = `${blobName}/${manifestEntry.entryName}`;
-    return parseManifest(zip.readAsText(manifestEntry), innerName);
+    return parseManifest(readEntry(manifestEntry), `${blobName}/${manifestEntry.entryName}`);
   }
 
   throw new Error(`[${blobName}] Zip contains no JSON, CSV, or Manifest.txt file`);
