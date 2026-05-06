@@ -29,7 +29,7 @@ function validateEnv() {
 async function processBlob(blobName, content) {
   let report;
   try {
-    report = parseReport(content, blobName);
+    report = await parseReport(content, blobName);
   } catch (err) {
     console.error(`[processor] Parse error for "${blobName}": ${err.message}`);
     return;

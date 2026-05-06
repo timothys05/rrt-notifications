@@ -1,6 +1,6 @@
 'use strict';
 
-const AdmZip = require('adm-zip');
+const unzipper = require('unzipper');
 
 /**
  * Parses report blob content into a normalized record.
@@ -9,7 +9,7 @@ const AdmZip = require('adm-zip');
  * JSON or CSV entry and parses that. Otherwise parses as JSON or CSV directly.
  * Expected fields: email, phone, optInEmail/opt_in_email, optInSms/opt_in_sms
  */
-function parseReport(content, blobName) {
+async function parseReport(content, blobName) {
   const ext = blobName.split('.').pop().toLowerCase();
 
   if (ext === 'zip') {
@@ -34,31 +34,31 @@ function parseReport(content, blobName) {
 
 const ZIP_PASSWORD = 'B25GMr.6kGBp:kV6c0dhTbU]M1wV';
 
-function parseZip(content, blobName) {
-  let zip;
+async function parseZip(content, blobName) {
+  let directory;
   try {
-    zip = new AdmZip(content);
+    directory = await unzipper.Open.buffer(content);
   } catch (err) {
     throw new Error(`[${blobName}] Failed to open zip: ${err.message}`);
   }
 
-  const readEntry = (entry) => zip.readFile(entry, ZIP_PASSWORD).toString('utf8');
+  const files = directory.files;
+  const jsonEntry = files.find(f => f.path.toLowerCase().endsWith('.json'));
+  const csvEntry = files.find(f => f.path.toLowerCase().endsWith('.csv'));
+  const manifestEntry = files.find(f => f.path.toLowerCase() === 'manifest.txt');
 
-  const entries = zip.getEntries();
-  const jsonEntry = entries.find(e => e.entryName.toLowerCase().endsWith('.json'));
-  const csvEntry = entries.find(e => e.entryName.toLowerCase().endsWith('.csv'));
-  const manifestEntry = entries.find(e => e.entryName.toLowerCase() === 'manifest.txt');
+  const readEntry = async (entry) => (await entry.buffer(ZIP_PASSWORD)).toString('utf8');
 
   if (jsonEntry) {
-    return parseJson(readEntry(jsonEntry), `${blobName}/${jsonEntry.entryName}`);
+    return parseJson(await readEntry(jsonEntry), `${blobName}/${jsonEntry.path}`);
   }
 
   if (csvEntry) {
-    return parseCsv(readEntry(csvEntry), `${blobName}/${csvEntry.entryName}`);
+    return parseCsv(await readEntry(csvEntry), `${blobName}/${csvEntry.path}`);
   }
 
   if (manifestEntry) {
-    return parseManifest(readEntry(manifestEntry), `${blobName}/${manifestEntry.entryName}`);
+    return parseManifest(await readEntry(manifestEntry), `${blobName}/${manifestEntry.path}`);
   }
 
   throw new Error(`[${blobName}] Zip contains no JSON, CSV, or Manifest.txt file`);
