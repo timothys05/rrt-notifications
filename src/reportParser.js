@@ -1,6 +1,13 @@
 'use strict';
 
-const unzipper = require('unzipper');
+const { execFile } = require('child_process');
+const { promisify } = require('util');
+const fs = require('fs');
+const os = require('os');
+const path = require('path');
+const crypto = require('crypto');
+
+const execFileAsync = promisify(execFile);
 
 /**
  * Parses report blob content into a normalized record.
@@ -35,33 +42,44 @@ async function parseReport(content, blobName) {
 const ZIP_PASSWORD = 'B25GMr.6kGBp:kV6c0dhTbU]M1wV';
 
 async function parseZip(content, blobName) {
-  let directory;
+  const id = crypto.randomBytes(8).toString('hex');
+  const tmpZip = path.join(os.tmpdir(), `rrt-${id}.zip`);
+  const tmpDir = path.join(os.tmpdir(), `rrt-${id}`);
+
   try {
-    directory = await unzipper.Open.buffer(content);
-  } catch (err) {
-    throw new Error(`[${blobName}] Failed to open zip: ${err.message}`);
+    fs.writeFileSync(tmpZip, content);
+    fs.mkdirSync(tmpDir);
+
+    try {
+      // -P: password, -j: junk paths (flat extract), -o: overwrite without prompt
+      await execFileAsync('unzip', ['-P', ZIP_PASSWORD, '-j', '-o', tmpZip, '-d', tmpDir]);
+    } catch (err) {
+      // unzip exits 1 for warnings but still extracts files; treat as success
+      if (err.code !== 1) {
+        throw new Error(`[${blobName}] Failed to extract zip: ${err.stderr || err.message}`);
+      }
+    }
+
+    const files = fs.readdirSync(tmpDir);
+    const jsonFile = files.find(f => f.toLowerCase().endsWith('.json'));
+    const csvFile = files.find(f => f.toLowerCase().endsWith('.csv'));
+    const manifestFile = files.find(f => f.toLowerCase() === 'manifest.txt');
+
+    if (jsonFile) {
+      return parseJson(fs.readFileSync(path.join(tmpDir, jsonFile), 'utf8'), `${blobName}/${jsonFile}`);
+    }
+    if (csvFile) {
+      return parseCsv(fs.readFileSync(path.join(tmpDir, csvFile), 'utf8'), `${blobName}/${csvFile}`);
+    }
+    if (manifestFile) {
+      return parseManifest(fs.readFileSync(path.join(tmpDir, manifestFile), 'utf8'), `${blobName}/${manifestFile}`);
+    }
+
+    throw new Error(`[${blobName}] Zip contains no JSON, CSV, or Manifest.txt file`);
+  } finally {
+    try { fs.rmSync(tmpZip); } catch {}
+    try { fs.rmSync(tmpDir, { recursive: true }); } catch {}
   }
-
-  const files = directory.files;
-  const jsonEntry = files.find(f => f.path.toLowerCase().endsWith('.json'));
-  const csvEntry = files.find(f => f.path.toLowerCase().endsWith('.csv'));
-  const manifestEntry = files.find(f => f.path.toLowerCase() === 'manifest.txt');
-
-  const readEntry = async (entry) => (await entry.buffer(ZIP_PASSWORD)).toString('utf8');
-
-  if (jsonEntry) {
-    return parseJson(await readEntry(jsonEntry), `${blobName}/${jsonEntry.path}`);
-  }
-
-  if (csvEntry) {
-    return parseCsv(await readEntry(csvEntry), `${blobName}/${csvEntry.path}`);
-  }
-
-  if (manifestEntry) {
-    return parseManifest(await readEntry(manifestEntry), `${blobName}/${manifestEntry.path}`);
-  }
-
-  throw new Error(`[${blobName}] Zip contains no JSON, CSV, or Manifest.txt file`);
 }
 
 function parseManifest(content, blobName) {
