@@ -70,7 +70,9 @@ async function parseZip(content, blobName) {
       return parseCsv(fs.readFileSync(path.join(tmpDir, csvFile), 'utf8'), `${blobName}/${csvFile}`);
     }
     if (manifestFile) {
-      return parseManifest(fs.readFileSync(path.join(tmpDir, manifestFile), 'utf8'), `${blobName}/${manifestFile}`);
+      const manifestText = fs.readFileSync(path.join(tmpDir, manifestFile), 'utf8');
+      console.log(`[parseZip] Manifest.txt contents:\n${manifestText}`);
+      return parseManifest(manifestText, `${blobName}/${manifestFile}`);
     }
 
     throw new Error(`[${blobName}] Zip contains no JSON, CSV, or Manifest.txt file`);
