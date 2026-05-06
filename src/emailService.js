@@ -16,8 +16,16 @@ async function sendConfirmationEmail(toEmail) {
     html: `<p>Hello,</p><p>We have received your report and it is being processed.</p><p>Thank you.</p>`,
   };
 
-  await sgMail.send(msg);
-  console.log(`[email] Confirmation sent to ${toEmail}`);
+  let response;
+  try {
+    [response] = await sgMail.send(msg);
+  } catch (err) {
+    console.error(
+      `[email] SendGrid error for ${toEmail}: status=${err.code ?? err.response?.statusCode} message=${err.message} body=${JSON.stringify(err.response?.body)}`
+    );
+    throw err;
+  }
+  console.log(`[email] Confirmation sent to ${toEmail} — status ${response.statusCode}`, response.body ?? '');
 }
 
 module.exports = { sendConfirmationEmail };
