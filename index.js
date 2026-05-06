@@ -2,17 +2,14 @@
 
 require('dotenv').config();
 
-const { createPoller } = require('./src/blobPoller');
-const { parseReport } = require('./src/reportParser');
+const express = require('express');
 const { sendConfirmationEmail } = require('./src/emailService');
 const { sendConfirmationSms } = require('./src/smsService');
 
-const POLL_INTERVAL_MS = parseInt(process.env.POLL_INTERVAL_MS, 10) || 5 * 60 * 1000;
+const PORT = process.env.PORT || 3000;
 
 function validateEnv() {
   const required = [
-    'AZURE_STORAGE_CONNECTION_STRING',
-    'AZURE_CONTAINER_NAME',
     'SENDGRID_API_KEY',
     'SENDGRID_FROM_EMAIL',
     'TWILIO_ACCOUNT_SID',
@@ -26,71 +23,55 @@ function validateEnv() {
   }
 }
 
-async function processBlob(blobName, content) {
-  let report;
-  try {
-    report = await parseReport(content, blobName);
-  } catch (err) {
-    console.error(`[processor] Parse error for "${blobName}": ${err.message}`);
-    return;
-  }
+const app = express();
+app.use(express.json());
 
-  const { email, phone, optInEmail, optInSms } = report;
-  console.log(`[processor] "${blobName}" — email: ${email || '(none)'}, phone: ${phone || '(none)'}, optInEmail: ${optInEmail}, optInSms: ${optInSms}`);
+app.get('/health', (req, res) => {
+  res.sendStatus(200);
+});
+
+app.post('/notify', async (req, res) => {
+  const { email, phone, optInEmail, optInSms } = req.body ?? {};
+
+  if (!email && !phone) {
+    return res.status(400).json({ error: 'At least one of email or phone is required' });
+  }
+  if (optInEmail && !email) {
+    return res.status(400).json({ error: 'optInEmail is true but no email provided' });
+  }
+  if (optInSms && !phone) {
+    return res.status(400).json({ error: 'optInSms is true but no phone provided' });
+  }
 
   const notifications = [];
 
   if (optInEmail && email) {
     notifications.push(
       sendConfirmationEmail(email).catch(err =>
-        console.error(`[processor] Email failed for "${blobName}": ${err.message}`)
+        console.error(`[notify] Email failed for ${email}: ${err.message}`)
       )
     );
-  } else if (email) {
-    console.log(`[processor] "${blobName}" — skipping email to ${email}: optInEmail is false`);
   }
 
   if (optInSms && phone) {
     notifications.push(
       sendConfirmationSms(phone).catch(err =>
-        console.error(`[processor] SMS failed for "${blobName}": ${err.message}`)
+        console.error(`[notify] SMS failed for ${phone}: ${err.message}`)
       )
     );
-  } else if (phone) {
-    console.log(`[processor] "${blobName}" — skipping SMS to ${phone}: optInSms is false`);
-  }
-
-  if (notifications.length === 0) {
-    console.log(`[processor] "${blobName}" — no notifications sent`);
   }
 
   await Promise.all(notifications);
-}
 
-async function runPollCycle(poller) {
-  const newBlobs = await poller.poll();
-
-  for (const { blobName, content } of newBlobs) {
-    await processBlob(blobName, content);
+  if (notifications.length === 0) {
+    console.log(`[notify] No notifications sent (all opt-ins false)`);
   }
-}
 
-async function main() {
-  validateEnv();
+  res.json({ ok: true });
+});
 
-  const poller = createPoller();
+validateEnv();
 
-  console.log(`[main] Starting RRT Notifications service. Polling every ${POLL_INTERVAL_MS / 1000}s.`);
-
-  // Run immediately on startup, then on the interval
-  await runPollCycle(poller);
-
-  setInterval(() => {
-    runPollCycle(poller).catch(err => console.error(`[main] Poll cycle error: ${err.message}`));
-  }, POLL_INTERVAL_MS);
-}
-
-main().catch(err => {
-  console.error(`[main] Fatal error: ${err.message}`);
-  process.exit(1);
+app.listen(PORT, () => {
+  console.log(`[main] RRT Notifications listening on port ${PORT}`);
 });
