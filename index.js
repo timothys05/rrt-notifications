@@ -128,6 +128,99 @@ app.get('/export-optins', async (req, res) => {
   }
 });
 
+const LITIFY_URL =
+  'https://pondlehocky.my.salesforce-sites.com/api/services/apexrest/litify_pm/api/v1/intake/create';
+
+const UNION_IDS = {
+  'SMW Local 25': 'a0iRN000007g2ZFYAY',
+  'UFCW 27': 'a0iRN000007g2fhYAA',
+  'UFCW 1776': 'a0i3h000000KzGqAAK',
+  'ICWUC': 'a0iRN000007gRSnYAM',
+  'Teamsters 237': 'a0iRN00000333qrYAA',
+};
+
+function formatIncidentDate(dateStr) {
+  const d = new Date(dateStr);
+  if (isNaN(d.getTime())) return dateStr;
+  const mm = String(d.getUTCMonth() + 1).padStart(2, '0');
+  const dd = String(d.getUTCDate()).padStart(2, '0');
+  const yyyy = d.getUTCFullYear();
+  return `${mm}/${dd}/${yyyy}`;
+}
+
+app.post('/litify', async (req, res) => {
+  const {
+    firstName,
+    lastName,
+    phone,
+    email,
+    natureOfAccidentOrInjury,
+    locationOfAccidentOrInjury,
+    date,
+    time,
+    union,
+  } = req.body ?? {};
+
+  if (!firstName || !lastName) {
+    return res.status(400).json({ error: 'firstName and lastName are required' });
+  }
+  if (!union || !UNION_IDS[union]) {
+    return res.status(400).json({
+      error: `union is required and must be one of: ${Object.keys(UNION_IDS).join(', ')}`,
+    });
+  }
+  if (!date) {
+    return res.status(400).json({ error: 'date is required' });
+  }
+
+  const descriptionParts = [];
+  if (natureOfAccidentOrInjury) descriptionParts.push(`Nature of Accident/Injury: ${natureOfAccidentOrInjury}`);
+  if (locationOfAccidentOrInjury) descriptionParts.push(`Location of Accident/Injury: ${locationOfAccidentOrInjury}`);
+  if (date) descriptionParts.push(`Date: ${date}`);
+  if (time) descriptionParts.push(`Time: ${time}`);
+  const description = descriptionParts.join('\n');
+
+  const payload = {
+    firstName,
+    lastName,
+    phone: phone ?? '',
+    email: email ?? '',
+    description,
+    incidentDate: formatIncidentDate(date),
+    ClientUnion: UNION_IDS[union],
+    websource: 'Eric L. Young, Esq.',
+    OtherSource: 'RRT',
+    caseType: 'Test',
+  };
+
+  try {
+    const response = await fetch(LITIFY_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+
+    const responseText = await response.text();
+    console.log(`[litify] Response ${response.status}: ${responseText}`);
+
+    if (!response.ok) {
+      return res.status(502).json({ error: 'Litify intake API error', status: response.status, body: responseText });
+    }
+
+    let responseData;
+    try {
+      responseData = JSON.parse(responseText);
+    } catch {
+      responseData = responseText;
+    }
+
+    return res.status(200).json({ ok: true, litify: responseData });
+  } catch (err) {
+    console.error(`[litify] Request failed: ${err.message}`);
+    return res.status(500).json({ error: 'Failed to submit to Litify' });
+  }
+});
+
 validateEnv();
 
 app.listen(PORT, () => {
