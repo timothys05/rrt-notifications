@@ -139,7 +139,20 @@ const UNION_IDS = {
   'Teamsters 237': 'a0iRN00000333qrYAA',
 };
 
+const MONTH_ABBRS = {
+  Jan: '01', Feb: '02', Mar: '03', Apr: '04', May: '05', Jun: '06',
+  Jul: '07', Aug: '08', Sep: '09', Oct: '10', Nov: '11', Dec: '12',
+};
+
 function formatIncidentDate(dateStr) {
+  // Handle iOS format: MMMdd_yyyy e.g. "Jun04_2026"
+  const iosMatch = dateStr.match(/^([A-Za-z]{3})(\d{2})_(\d{4})$/);
+  if (iosMatch) {
+    const [, mon, dd, yyyy] = iosMatch;
+    const mm = MONTH_ABBRS[mon];
+    if (mm) return `${mm}/${dd}/${yyyy}`;
+  }
+
   const d = new Date(dateStr);
   if (isNaN(d.getTime())) return dateStr;
   const mm = String(d.getUTCMonth() + 1).padStart(2, '0');
